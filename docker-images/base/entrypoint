@@ -1,0 +1,76 @@
+#!/bin/bash
+
+set -e
+
+start_master()
+{
+  . "/usr/lib/spark/sbin/spark-config.sh"
+  . "/usr/lib/spark/bin/load-spark-env.sh"
+
+  SPARK_MASTER_HOST="spark-master" #"$( hostname )"
+
+  /usr/lib/spark/bin/spark-class "org.apache.spark.deploy.master.Master" \
+    --ip "${SPARK_MASTER_HOST}" \
+    --port "${SPARK_MASTER_PORT}" \
+    --webui-port "${SPARK_MASTER_WEBUI_PORT}"
+}
+
+start_worker()
+{
+  . "/usr/lib/spark/sbin/spark-config.sh"
+  . "/usr/lib/spark/bin/load-spark-env.sh"
+
+  /usr/lib/spark/bin/spark-class "org.apache.spark.deploy.worker.Worker" \
+    --webui-port "${SPARK_WORKER_WEBUI_PORT}" \
+    "spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT}"
+}
+
+start_history()
+{
+  . "/usr/lib/spark/sbin/spark-config.sh"
+  . "/usr/lib/spark/bin/load-spark-env.sh"
+
+  echo "SPARK_CONF_DIR=${SPARK_CONF_DIR}"
+
+  /usr/lib/spark/bin/spark-class "org.apache.spark.deploy.history.HistoryServer"
+}
+
+write_config_files()
+{
+  declare tpl_file_path=
+  declare file_path=
+  find "/etc/spark" -name "*.tpl" | while read tpl_file_path; do
+    file_path="${tpl_file_path%.*}"
+    sigil -p -f "${tpl_file_path}" >"${file_path}"
+    rm "${tpl_file_path}"
+  done
+}
+
+main()
+{
+  write_config_files
+
+  declare action="${1}"
+  case "${action}" in
+    "start-master")
+        shift
+        start_master "${@}"
+      ;;
+
+      "start-worker")
+          shift
+          start_worker "${@}"
+        ;;
+
+      "start-history")
+          shift
+          start_history "${@}"
+        ;;
+
+    *)
+      "${@}"
+  esac
+
+}
+
+main "${@}"
